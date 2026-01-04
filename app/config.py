@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -11,6 +12,7 @@ class Settings(BaseSettings):
     # Google Vertex AI
     google_cloud_project: str
     google_cloud_location: str = "us-central1"
+    google_application_credentials_json: Optional[str] = None  # For production
 
     # JWT Authentication
     jwt_secret_key: str

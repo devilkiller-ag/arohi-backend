@@ -10,9 +10,9 @@ from app.auth import hash_password, verify_password, create_access_token, get_cu
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    """Register a new user."""
+    """Register a new user and return access token."""
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -26,13 +26,17 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         email=user_data.email,
         password_hash=hashed_password,
+        name=user_data.name,
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return new_user
+    # Create access token
+    access_token = create_access_token(new_user.id)
+
+    return Token(access_token=access_token)
 
 
 @router.post("/login", response_model=Token)
