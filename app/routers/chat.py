@@ -10,12 +10,15 @@ from app.models.user import User
 from app.models.message import Message
 from app.schemas.message import MessageCreate, MessageResponse, MessageListResponse, ChatResponse
 from app.auth import get_current_user
+from app.services.llm_service import get_llm_service
 
 router = APIRouter()
 
 # Default pagination limit
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
+# Number of recent messages to include in LLM context
+CONTEXT_MESSAGE_LIMIT = 20
 
 
 @router.get("/messages", response_model=MessageListResponse)
@@ -69,7 +72,7 @@ async def send_message(
     current_user: User = Depends(get_current_user),
 ):
     """Send a message and get AI response."""
-    # Save user message
+    # Save user message first
     user_message = Message(
         user_id=current_user.id,
         role="user",
@@ -79,9 +82,32 @@ async def send_message(
     db.commit()
     db.refresh(user_message)
 
-    # TODO: Generate AI response using Vertex AI
-    # For now, return a placeholder response
-    ai_response_content = f"Thank you for your message. I'm Arohi, your AI health coach. This is a placeholder response - Vertex AI integration coming soon!"
+    # Get recent chat history for context
+    recent_messages = (
+        db.query(Message)
+        .filter(Message.user_id == current_user.id)
+        .filter(Message.id != user_message.id)  # Exclude the message we just saved
+        .order_by(desc(Message.created_at))
+        .limit(CONTEXT_MESSAGE_LIMIT)
+        .all()
+    )
+    # Reverse to get chronological order
+    recent_messages.reverse()
+
+    # Format chat history for LLM
+    chat_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in recent_messages
+    ]
+
+    # Generate AI response using Vertex AI
+    llm_service = get_llm_service()
+    ai_response_content = llm_service.generate_response(
+        user_message=message_data.content,
+        chat_history=chat_history,
+        user_memories=None,  # TODO: Add memory service integration
+        relevant_protocols=None,  # TODO: Add protocol service integration
+    )
 
     # Save AI response
     assistant_message = Message(
