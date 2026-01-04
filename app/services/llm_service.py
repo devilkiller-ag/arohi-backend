@@ -1,10 +1,43 @@
 from typing import Optional
+import os
+import json
+import tempfile
 import vertexai
 from vertexai.preview.generative_models import GenerativeModel, Content, Part
 
 from app.config import get_settings
 
 settings = get_settings()
+
+
+def _setup_credentials():
+    """
+    Set up Google Cloud credentials.
+
+    - Production: Uses GOOGLE_APPLICATION_CREDENTIALS_JSON env var (JSON string)
+    - Local: Uses Application Default Credentials from `gcloud auth application-default login`
+    """
+    credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
+    if credentials_json:
+        # Production: Write JSON to temp file and set GOOGLE_APPLICATION_CREDENTIALS
+        try:
+            credentials_dict = json.loads(credentials_json)
+
+            # Create a temp file for the credentials
+            fd, credentials_path = tempfile.mkstemp(suffix=".json")
+            with os.fdopen(fd, "w") as f:
+                json.dump(credentials_dict, f)
+
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+            print("Using credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        except json.JSONDecodeError as e:
+            print(f"Error parsing GOOGLE_APPLICATION_CREDENTIALS_JSON: {e}")
+            raise
+    else:
+        # Local: Rely on Application Default Credentials (ADC)
+        # Set by running: gcloud auth application-default login
+        print("Using Application Default Credentials (ADC)")
 
 # System prompt for Arohi health coach
 SYSTEM_PROMPT = """You are Arohi, a friendly and empathetic AI health coach. Your name means "personal growth & health journey" in Sanskrit.
@@ -45,6 +78,9 @@ class LLMService:
     def _initialize(self):
         """Initialize Vertex AI (lazy initialization)."""
         if not self._initialized:
+            # Set up credentials (handles both local ADC and production JSON)
+            _setup_credentials()
+
             vertexai.init(
                 project=settings.google_cloud_project,
                 location=settings.google_cloud_location,
