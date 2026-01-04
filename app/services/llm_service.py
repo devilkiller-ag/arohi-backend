@@ -85,10 +85,7 @@ class LLMService:
                 project=settings.google_cloud_project,
                 location=settings.google_cloud_location,
             )
-            self._model = GenerativeModel(
-                "gemini-1.5-flash",
-                system_instruction=SYSTEM_PROMPT,
-            )
+            self._model = GenerativeModel("gemini-2.0-flash-001")
             self._initialized = True
 
     def generate_response(
@@ -128,17 +125,20 @@ class LLMService:
         # Build conversation history for the model
         contents = []
 
-        # Add context as first user message if we have any
+        # Add system prompt as first message pair
+        system_context = SYSTEM_PROMPT
         if context_parts:
             context_message = "\n\n".join(context_parts)
-            contents.append(Content(
-                role="user",
-                parts=[Part.from_text(f"[Context for this conversation]\n{context_message}")]
-            ))
-            contents.append(Content(
-                role="model",
-                parts=[Part.from_text("I understand. I'll keep this context in mind while helping the user.")]
-            ))
+            system_context += f"\n\n[Context for this conversation]\n{context_message}"
+
+        contents.append(Content(
+            role="user",
+            parts=[Part.from_text(f"[System Instructions]\n{system_context}")]
+        ))
+        contents.append(Content(
+            role="model",
+            parts=[Part.from_text("I understand. I'm Arohi, your friendly AI health coach. I'll follow these guidelines and keep the context in mind. How can I help you today?")]
+        ))
 
         # Add chat history
         if chat_history:
