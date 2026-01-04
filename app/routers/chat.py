@@ -11,6 +11,8 @@ from app.models.message import Message
 from app.schemas.message import MessageCreate, MessageResponse, MessageListResponse, ChatResponse
 from app.auth import get_current_user
 from app.services.llm_service import get_llm_service
+from app.services.protocol_service import get_protocol_service
+from app.services.memory_service import get_memory_service
 
 router = APIRouter()
 
@@ -100,13 +102,23 @@ async def send_message(
         for msg in recent_messages
     ]
 
+    # Get user memories for context
+    memory_service = get_memory_service()
+    user_memories = memory_service.get_user_memories(current_user.id, db)
+
+    # Find relevant protocols based on user message
+    protocol_service = get_protocol_service()
+    relevant_protocols = protocol_service.find_relevant_protocols(
+        message_data.content, db
+    )
+
     # Generate AI response using Vertex AI
     llm_service = get_llm_service()
     ai_response_content = llm_service.generate_response(
         user_message=message_data.content,
         chat_history=chat_history,
-        user_memories=None,  # TODO: Add memory service integration
-        relevant_protocols=None,  # TODO: Add protocol service integration
+        user_memories=user_memories if user_memories else None,
+        relevant_protocols=relevant_protocols if relevant_protocols else None,
     )
 
     # Save AI response
@@ -118,6 +130,14 @@ async def send_message(
     db.add(assistant_message)
     db.commit()
     db.refresh(assistant_message)
+
+    # Extract and store any new memories from the conversation
+    memory_service.extract_and_store_memories(
+        user_id=current_user.id,
+        user_message=message_data.content,
+        assistant_response=ai_response_content,
+        db=db,
+    )
 
     return ChatResponse(
         user_message=MessageResponse.model_validate(user_message),
