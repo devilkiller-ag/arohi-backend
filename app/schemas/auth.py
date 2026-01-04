@@ -6,7 +6,7 @@ class UserRegister(BaseModel):
     """Schema for user registration."""
     email: EmailStr
     password: str = Field(..., min_length=6, max_length=100)
-    name: Optional[str] = Field(None, max_length=100)
+    name: str = Field(..., min_length=2, max_length=100, description="User's name (required)")
 
 
 class UserLogin(BaseModel):
