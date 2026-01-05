@@ -23,6 +23,9 @@ class User(Base):
     # Relationships
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     memories = relationship("Memory", back_populates="user", cascade="all, delete-orphan")
+    scheduled_followups = relationship("ScheduledFollowUp", back_populates="user", cascade="all, delete-orphan")
+    engagement = relationship("UserEngagement", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"

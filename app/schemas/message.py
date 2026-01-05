@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import Optional
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
 class MessageStatusEnum(str, Enum):
@@ -30,11 +30,21 @@ class MessageResponse(BaseModel):
     id: UUID
     role: str
     content: str
-    status: str = "delivered"
+    status: Optional[str] = "delivered"
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+    @field_validator('status', mode='before')
+    @classmethod
+    def set_default_status(cls, v):
+        return v if v is not None else 'delivered'
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, dt: datetime) -> str:
+        """Serialize datetime as UTC ISO string with Z suffix."""
+        return dt.isoformat() + "Z"
 
 
 class MessageListResponse(BaseModel):

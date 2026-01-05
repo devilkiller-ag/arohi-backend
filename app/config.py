@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
+    # Redis (for Celery)
+    redis_url: str = "redis://localhost:6379/0"
+
     # Google Vertex AI
     google_cloud_project: str
     google_cloud_location: str = "us-central1"
@@ -22,6 +25,11 @@ class Settings(BaseSettings):
     # App Settings
     debug: bool = False
     cors_origins: str = "http://localhost:3000"
+
+    # Follow-up Settings (in hours)
+    followup_check_interval_hours: int = 4  # How often to check if follow-up needed
+    followup_inactivity_hours: int = 24  # Send follow-up if no message in X hours
+    followup_plan_checkin_hours: int = 48  # Check on plan progress every X hours
 
     class Config:
         env_file = ".env"

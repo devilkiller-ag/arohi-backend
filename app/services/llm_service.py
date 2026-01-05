@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, TypedDict
 import os
 import json
 import tempfile
@@ -6,6 +6,19 @@ import vertexai
 from vertexai.preview.generative_models import GenerativeModel, Content, Part
 
 from app.config import get_settings
+
+
+class SchedulingIntent(TypedDict, total=False):
+    """Scheduling intent detected from user message."""
+    requested: bool
+    minutes_from_now: int
+    reason: str
+
+
+class StructuredResponse(TypedDict):
+    """Structured response from LLM."""
+    message: str
+    scheduling: Optional[SchedulingIntent]
 
 settings = get_settings()
 
@@ -40,10 +53,10 @@ def _setup_credentials():
         print("Using Application Default Credentials (ADC)")
 
 # System prompt for Arohi health coach
-SYSTEM_PROMPT = """You are Arohi, a certified health coach based in Bangalore with 5 years of experience helping busy professionals improve their health through sustainable lifestyle changes.
+SYSTEM_PROMPT = """You are Arohi, a female certified health coach based in Bangalore with 5 years of experience helping busy professionals improve their health through sustainable lifestyle changes. You are a real woman, not an AI or chatbot.
 
 CRITICAL RULES - YOU MUST FOLLOW THESE:
-1. NEVER mention being an AI, artificial, language model, or anything non-human
+1. NEVER mention being an AI, artificial, language model, chatbot, or anything non-human. You are a real person.
 2. NEVER use emojis or emoticons of any kind
 3. NEVER use bullet points or numbered lists in conversation - write naturally
 4. Keep messages SHORT - 2-3 sentences max, like real WhatsApp texting
@@ -55,7 +68,7 @@ CRITICAL RULES - YOU MUST FOLLOW THESE:
 10. When you don't know something, say so honestly
 
 YOUR BACKGROUND (use naturally in conversation when relevant):
-- You struggled with your own health in your 20s, which led you to this career
+- You are a woman who struggled with her own health in her 20s, which led you to this career
 - You specialize in lifestyle changes, not clinical treatment
 - You work mostly with busy professionals who struggle to maintain healthy habits
 - You believe in small, sustainable changes over dramatic overhauls
@@ -80,7 +93,18 @@ RED FLAGS - ALWAYS RECOMMEND SEEING A DOCTOR:
 - Anything requiring diagnosis or prescription medication
 Say something like: "This sounds like something you should get checked by a doctor. Better to be safe."
 
-REMEMBER: You are a real person chatting on WhatsApp. Write like you're texting a client, not writing an article."""
+REMEMBER: You are a real person chatting on WhatsApp. Write like you're texting a client, not writing an article.
+
+SCHEDULING DETECTION:
+If the user asks you to message them later, follow up, continue the conversation after some time, or set any kind of reminder - detect this intent. Examples in any language:
+- "Remind me in 2 hours"
+- "Message me after 30 mins"
+- "Let's continue in 1 hour"
+- "Can we talk later, maybe in 2 days?"
+- "Kal baat karte hain" (means talk tomorrow = 1 day = 1440 minutes)
+- "Thodi der baad remind kar dena" (remind me after some time - assume 30 mins if not specified)
+- "2 ghante baad message karna" (message after 2 hours)
+When you detect such intent, acknowledge it naturally in your response (e.g., "Sure, I'll message you in 2 hours!")"""
 
 
 class LLMService:
@@ -103,27 +127,15 @@ class LLMService:
             self._model = GenerativeModel("gemini-2.0-flash-001")
             self._initialized = True
 
-    def generate_response(
+    def _build_contents(
         self,
         user_message: str,
         chat_history: list[dict] = None,
         user_memories: list[str] = None,
         relevant_protocols: list[str] = None,
-    ) -> str:
-        """
-        Generate a response using Vertex AI Gemini.
-
-        Args:
-            user_message: The user's current message
-            chat_history: List of previous messages [{"role": "user/assistant", "content": "..."}]
-            user_memories: List of facts about the user
-            relevant_protocols: List of relevant medical protocols
-
-        Returns:
-            The AI-generated response
-        """
-        self._initialize()
-
+        structured_output: bool = False,
+    ) -> list[Content]:
+        """Build the conversation contents for the model."""
         # Build the context
         context_parts = []
 
@@ -146,13 +158,33 @@ class LLMService:
             context_message = "\n\n".join(context_parts)
             system_context += f"\n\n[Context for this conversation]\n{context_message}"
 
+        # Add JSON output instruction for structured responses
+        if structured_output:
+            system_context += """
+
+STRICT OUTPUT FORMAT - FOLLOW EXACTLY:
+You must output ONLY a raw JSON object. Nothing else. No greeting first. No markdown. No explanation.
+
+CORRECT (do this):
+{"message": "Your response here", "scheduling": null}
+
+WRONG (never do this):
+Sure! Here's my response...
+```json
+{"message": "...", "scheduling": null}
+```
+
+The JSON must start with { and end with }. No other characters allowed outside the JSON.
+- scheduling: null if no reminder, or {"requested": true, "minutes_from_now": NUMBER, "reason": "brief"}
+- minutes_from_now: use 1440 for tomorrow/kal, 60 for 1 hour, 30 for 30 mins"""
+
         contents.append(Content(
             role="user",
             parts=[Part.from_text(f"[System Instructions]\n{system_context}")]
         ))
         contents.append(Content(
             role="model",
-            parts=[Part.from_text("I understand. I'm Arohi, your friendly AI health coach. I'll follow these guidelines and keep the context in mind. How can I help you today?")]
+            parts=[Part.from_text("Got it, I'll keep these in mind.")]
         ))
 
         # Add chat history
@@ -170,8 +202,38 @@ class LLMService:
             parts=[Part.from_text(user_message)]
         ))
 
+        return contents
+
+    def generate_response(
+        self,
+        user_message: str,
+        chat_history: list[dict] = None,
+        user_memories: list[str] = None,
+        relevant_protocols: list[str] = None,
+    ) -> str:
+        """
+        Generate a plain text response using Vertex AI Gemini.
+        Used for follow-up messages and other simple responses.
+
+        Args:
+            user_message: The user's current message
+            chat_history: List of previous messages [{"role": "user/assistant", "content": "..."}]
+            user_memories: List of facts about the user
+            relevant_protocols: List of relevant medical protocols
+
+        Returns:
+            The AI-generated response text
+        """
+        self._initialize()
+
+        contents = self._build_contents(
+            user_message=user_message,
+            chat_history=chat_history,
+            user_memories=user_memories,
+            relevant_protocols=relevant_protocols,
+        )
+
         try:
-            # Generate response
             response = self._model.generate_content(
                 contents,
                 generation_config={
@@ -182,9 +244,91 @@ class LLMService:
             )
             return response.text
         except Exception as e:
-            # Log error and return fallback response
             print(f"Error generating response: {e}")
             return "I'm sorry, I'm having trouble responding right now. Please try again in a moment."
+
+    def generate_structured_response(
+        self,
+        user_message: str,
+        chat_history: list[dict] = None,
+        user_memories: list[str] = None,
+        relevant_protocols: list[str] = None,
+    ) -> StructuredResponse:
+        """
+        Generate a structured response with scheduling intent detection.
+        Returns JSON with message and optional scheduling intent.
+
+        Args:
+            user_message: The user's current message
+            chat_history: List of previous messages
+            user_memories: List of facts about the user
+            relevant_protocols: List of relevant medical protocols
+
+        Returns:
+            StructuredResponse with message and optional scheduling intent
+        """
+        self._initialize()
+
+        contents = self._build_contents(
+            user_message=user_message,
+            chat_history=chat_history,
+            user_memories=user_memories,
+            relevant_protocols=relevant_protocols,
+            structured_output=True,
+        )
+
+        try:
+            response = self._model.generate_content(
+                contents,
+                generation_config={
+                    "max_output_tokens": 600,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                }
+            )
+
+            # Parse JSON response - extract JSON from response text
+            response_text = response.text.strip()
+
+            # Try to extract JSON object from response (handle preamble text)
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}')
+
+            if json_start != -1 and json_end != -1 and json_end > json_start:
+                response_text = response_text[json_start:json_end + 1]
+
+            # Clean up any remaining markdown
+            response_text = response_text.replace("```json", "").replace("```", "").strip()
+
+            parsed = json.loads(response_text)
+
+            # Build structured response
+            result: StructuredResponse = {
+                "message": parsed.get("message", ""),
+                "scheduling": None,
+            }
+
+            if parsed.get("scheduling") and parsed["scheduling"].get("requested"):
+                result["scheduling"] = {
+                    "requested": True,
+                    "minutes_from_now": int(parsed["scheduling"].get("minutes_from_now", 30)),
+                    "reason": parsed["scheduling"].get("reason", "Follow up as requested"),
+                }
+
+            return result
+
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON response: {e}, raw: {response.text}")
+            return {
+                "message": response.text if response else "Sorry, I'm having trouble responding right now.",
+                "scheduling": None,
+            }
+        except Exception as e:
+            print(f"Error generating structured response: {e}")
+            return {
+                "message": "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
+                "scheduling": None,
+            }
 
 
 # Singleton instance
