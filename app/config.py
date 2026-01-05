@@ -12,10 +12,13 @@ class Settings(BaseSettings):
     # Redis (for Celery)
     redis_url: str = "redis://localhost:6379/0"
 
-    # Google Vertex AI
-    google_cloud_project: str
+    # Google AI (GenAI SDK)
+    google_api_key: str  # Get from https://aistudio.google.com/app/apikey
+
+    # Google Vertex AI (legacy - keeping for backward compatibility)
+    google_cloud_project: Optional[str] = None
     google_cloud_location: str = "us-central1"
-    google_application_credentials_json: Optional[str] = None  # For production
+    google_application_credentials_json: Optional[str] = None
 
     # JWT Authentication
     jwt_secret_key: str
