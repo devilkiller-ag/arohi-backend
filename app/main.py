@@ -1,3 +1,6 @@
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,12 +10,35 @@ from app.routers import websocket as ws_router
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup/shutdown events."""
+    # Startup: Start background scheduler (replaces Celery for free tier)
+    use_scheduler = os.environ.get("USE_SCHEDULER", "true").lower() == "true"
+    if use_scheduler:
+        try:
+            from app.scheduler import start_scheduler
+            start_scheduler()
+        except Exception as e:
+            print(f"Warning: Could not start scheduler: {e}")
+    yield
+    # Shutdown: Stop scheduler
+    if use_scheduler:
+        try:
+            from app.scheduler import stop_scheduler
+            stop_scheduler()
+        except Exception:
+            pass
+
+
 app = FastAPI(
     title="Arohi - Health Coach",
     description="Personal health coaching API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Configure CORS

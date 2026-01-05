@@ -18,17 +18,20 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 email-validator==2.1.0
 
-# Google Vertex AI
-google-cloud-aiplatform==1.38.1
+# Google AI
+google-generativeai==0.8.3
 
 # Utilities
 python-dotenv==1.0.0
 httpx==0.26.0
 
-# Background Tasks (Celery + Redis)
+# Background Tasks
+# Option 1: Celery + Redis (for paid tier with separate worker)
 celery[redis]==5.3.6
 redis==5.0.1
-flower==2.0.1  # Celery monitoring (optional)
+
+# Option 2: APScheduler (for free tier, runs in same process)
+apscheduler==3.10.4
 
 # Development
 pytest==7.4.4
