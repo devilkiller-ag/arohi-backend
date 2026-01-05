@@ -254,9 +254,10 @@ async def root():
 
 ### 3.1 Prepare Repository
 
-1. Push your code to GitHub
+1. Push your code to GitHub: https://github.com/devilkiller-ag/arohi-backend
 2. Make sure these files exist:
    - `requirements.txt` (with all dependencies)
+   - `.python-version` (specifies Python 3.11.9)
    - `Procfile` (already exists)
 
 ### 3.2 Create Render Web Service
@@ -271,7 +272,6 @@ async def root():
 | Name | `arohi-backend` |
 | Region | Singapore (or closest) |
 | Branch | `main` |
-| Root Directory | `backend` |
 | Runtime | Python 3 |
 | Build Command | `pip install -r requirements.txt` |
 | Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
@@ -283,13 +283,13 @@ In Render dashboard, go to "Environment" and add:
 
 ```
 DATABASE_URL=postgresql://neondb_owner:xxx@xxx.neon.tech/neondb?sslmode=require
-REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
+REDIS_URL=redis://default:xxx@xxx.upstash.io:6379
 GOOGLE_API_KEY=your-gemini-api-key
 JWT_SECRET_KEY=your-secure-random-string-at-least-32-chars
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 DEBUG=false
-CORS_ORIGINS=https://your-frontend-domain.vercel.app
+CORS_ORIGINS=https://arohi-healthcoach.vercel.app
 ```
 
 ### 3.4 Deploy
@@ -299,7 +299,7 @@ Click "Create Web Service". Render will:
 2. Install dependencies
 3. Start your application
 
-Your API will be available at: `https://arohi-backend.onrender.com`
+Your API will be available at: `https://arohi-backend-3gno.onrender.com/api`
 
 ---
 
@@ -308,8 +308,8 @@ Your API will be available at: `https://arohi-backend.onrender.com`
 Update your Vercel frontend environment variables:
 
 ```
-NEXT_PUBLIC_API_URL=https://arohi-backend.onrender.com/api
-NEXT_PUBLIC_WS_URL=wss://arohi-backend.onrender.com/api
+NEXT_PUBLIC_API_URL=https://arohi-backend-3gno.onrender.com/api
+NEXT_PUBLIC_WS_URL=wss://arohi-backend-3gno.onrender.com/api
 ```
 
 Note: Use `wss://` (secure WebSocket) for production.
@@ -357,7 +357,6 @@ powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
 ### Deploy
 
 ```bash
-cd backend
 fly auth login
 fly launch
 ```

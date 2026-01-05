@@ -2,6 +2,19 @@
 
 A production-ready health coaching API that provides personalized health guidance through conversational AI. Built with FastAPI, PostgreSQL, and Google Gemini AI.
 
+## Live Demo
+
+- **API**: https://arohi-backend-3gno.onrender.com
+- **API Docs**: https://arohi-backend-3gno.onrender.com/docs
+- **Health Check**: https://arohi-backend-3gno.onrender.com/api/health
+- **Frontend**: https://arohi-healthcoach.vercel.app
+
+## Repository
+
+This is a standalone backend repository. The frontend is maintained separately:
+- **Backend**: https://github.com/devilkiller-ag/arohi-backend
+- **Frontend**: https://github.com/devilkiller-ag/arohi-frontend
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -97,7 +110,9 @@ Arohi is an AI-powered health coach designed to provide personalized health guid
 |----------|------------|---------|---------|
 | Framework | FastAPI | 0.109.0 | Web framework with async support |
 | Server | Uvicorn | 0.27.0 | ASGI server |
-| Database | PostgreSQL | 15+ | Primary data store |
+| Database | PostgreSQL (Neon) | 15+ | Primary data store |
+| Cache/Queue | Redis (Upstash) | 7+ | Background task broker |
+| Scheduler | APScheduler | 3.10.4 | In-process task scheduling |
 | ORM | SQLAlchemy | 2.0.25 | Database operations |
 | Migrations | Alembic | 1.13.1 | Schema migrations |
 | Task Queue | Celery | 5.3.6 | Background job processing |
@@ -758,9 +773,10 @@ print(settings.database_url)
 
 ### Setup
 
-1. **Clone and navigate**:
+1. **Clone the repository**:
 ```bash
-cd backend
+git clone https://github.com/devilkiller-ag/arohi-backend.git
+cd arohi-backend
 ```
 
 2. **Create virtual environment**:
@@ -806,23 +822,50 @@ celery -A app.celery_app beat --loglevel=info
 
 ## Deployment
 
-### Production Checklist
+### Current Production Setup
 
-- [ ] Set `DEBUG=false`
-- [ ] Use strong `JWT_SECRET_KEY` (32+ characters)
-- [ ] Configure production database URL
-- [ ] Set up Redis for Celery
-- [ ] Configure CORS origins for production domain
-- [ ] Enable HTTPS
-- [ ] Set up monitoring and logging
+| Service | Provider | Tier |
+|---------|----------|------|
+| Backend API | Render.com | Free |
+| Database | Neon PostgreSQL | Free |
+| Redis | Upstash | Free |
+| Monitoring | UptimeRobot | Free |
 
-### Procfile (Render/Heroku)
+### Environment Variables (Render)
+
+```
+DATABASE_URL=postgresql://...@neon.tech/neondb?sslmode=require
+GOOGLE_API_KEY=your-gemini-api-key
+REDIS_URL=redis://...@upstash.io:6379
+JWT_SECRET_KEY=your-secret-key
+CORS_ORIGINS=https://arohi-healthcoach.vercel.app
+DEBUG=false
+USE_SCHEDULER=true
+```
+
+### Procfile
 
 ```
 web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-### Docker (Example)
+### Background Tasks
+
+The application uses APScheduler (runs in-process) instead of separate Celery workers for free-tier compatibility:
+- **process_scheduled_reminders**: Runs every minute
+- **check_and_send_followups**: Runs every hour
+
+### Production Checklist
+
+- [x] Set `DEBUG=false`
+- [x] Use strong `JWT_SECRET_KEY` (32+ characters)
+- [x] Configure production database URL (Neon)
+- [x] Set up Redis (Upstash)
+- [x] Configure CORS origins for production domain
+- [x] Enable HTTPS (automatic on Render)
+- [x] Set up monitoring (UptimeRobot)
+
+### Docker (Optional)
 
 ```dockerfile
 FROM python:3.11-slim
